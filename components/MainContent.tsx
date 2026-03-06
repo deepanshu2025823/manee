@@ -6,7 +6,7 @@ import {
   Mail, Map, FileText, Code, Loader2, Sparkles, Copy, Check 
 } from 'lucide-react';
 import io from 'socket.io-client';
-import { useSession } from "next-auth/react"; 
+import { useSession, signIn } from "next-auth/react"; 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -21,13 +21,22 @@ interface MainContentProps {
 }
 
 export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile }: MainContentProps) {
-  const { data: session } = useSession(); 
+  const { data: session, status } = useSession(); 
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<{ role: string, content: string }[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null); 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      const timer = setTimeout(() => {
+        signIn('google'); 
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [status]);
 
   useEffect(() => {
     socket = io();
@@ -111,11 +120,20 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
           <button className="bg-[#1e1f20] hover:bg-[#333538] text-sm px-4 py-2 rounded-lg font-medium transition-colors hidden sm:block text-[#e3e3e3]">
             Try Manee Advanced
           </button>
-          <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center cursor-pointer overflow-hidden shadow-md">
-            {session?.user?.image ? (
-                <img src={session.user.image} alt="User" className="w-full h-full object-cover" />
+          
+          <div className="flex items-center gap-2">
+            {status === "loading" ? (
+                <Loader2 className="w-4 h-4 animate-spin text-[#c4c7c5]" />
+            ) : session ? (
+                <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full overflow-hidden border border-white/10 shadow-md">
+                        <img src={session.user?.image!} alt="User" className="w-full h-full object-cover" />
+                    </div>
+                </div>
             ) : (
-                <User className="w-5 h-5 text-white" />
+                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center cursor-pointer overflow-hidden shadow-md">
+                   <User className="w-5 h-5 text-white" />
+                </div>
             )}
           </div>
         </div>
