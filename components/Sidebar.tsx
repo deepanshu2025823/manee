@@ -1,7 +1,11 @@
 // components/Sidebar.tsx
 
 import { useState, useEffect } from 'react';
-import { Menu, Plus, MessageSquare, HelpCircle, History, Settings, Trash2, XCircle } from 'lucide-react';
+import { 
+  Menu, Plus, MessageSquare, HelpCircle, 
+  History, Settings, Trash2, XCircle, LogOut, User 
+} from 'lucide-react';
+import { signIn, signOut, useSession } from "next-auth/react";
 import SettingsModal from './SettingsModal'; 
 import HelpModal from './HelpModal'; 
 import ActivityModal from './ActivityModal'; 
@@ -17,6 +21,7 @@ interface ChatHistory {
 }
 
 export default function Sidebar({ isSidebarOpen, setIsSidebarOpen }: SidebarProps) {
+  const { data: session } = useSession(); 
   const [history, setHistory] = useState<ChatHistory[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false); 
@@ -31,30 +36,30 @@ export default function Sidebar({ isSidebarOpen, setIsSidebarOpen }: SidebarProp
   };
 
   const deleteChat = async (e: React.MouseEvent, chatId: string) => {
-  e.stopPropagation(); 
-  if (!confirm("Delete this chat?")) return;
-  
-  try {
-    const res = await fetch(`/api/history?chatId=${chatId}`, { method: 'DELETE' });
-    if (res.ok) {
-      window.location.href = '/'; 
+    e.stopPropagation(); 
+    if (!confirm("Delete this chat?")) return;
+    
+    try {
+      const res = await fetch(`/api/history?chatId=${chatId}`, { method: 'DELETE' });
+      if (res.ok) {
+        window.location.href = '/'; 
+      }
+    } catch (error) { 
+      console.error("Delete failed:", error); 
     }
-  } catch (error) { 
-    console.error("Delete failed:", error); 
-  }
   };
 
   const clearAllHistory = async () => {
-  if (!confirm("Are you sure you want to clear all history? This cannot be undone.")) return;
-  
-  try {
-    const res = await fetch('/api/history', { method: 'DELETE' });
-    if (res.ok) {
-      window.location.reload();
+    if (!confirm("Are you sure you want to clear all history? This cannot be undone.")) return;
+    
+    try {
+      const res = await fetch('/api/history', { method: 'DELETE' });
+      if (res.ok) {
+        window.location.reload();
+      }
+    } catch (error) { 
+      console.error("Clear history failed:", error); 
     }
-  } catch (error) { 
-    console.error("Clear history failed:", error); 
-  }
   };
 
   useEffect(() => {
@@ -112,24 +117,40 @@ export default function Sidebar({ isSidebarOpen, setIsSidebarOpen }: SidebarProp
         </div>
 
         <div className={`p-3 mt-auto border-t border-white/5 space-y-1 ${isSidebarOpen ? 'block' : 'hidden md:flex flex-col items-center'}`}>
-          <button 
-            onClick={() => setIsHelpOpen(true)} 
-            className="flex items-center gap-3 p-2.5 hover:bg-[#333538] rounded-xl w-full text-sm text-[#e3e3e3] transition-colors"
-          >
+          
+          <div className="mb-2">
+            {session ? (
+              <div className={`flex items-center gap-3 p-2 rounded-xl bg-[#131314] border border-white/5 ${isSidebarOpen ? '' : 'justify-center'}`}>
+                <img src={session.user?.image!} alt="User" className="w-6 h-6 rounded-full border border-white/10" />
+                {isSidebarOpen && (
+                  <div className="flex flex-col flex-1 overflow-hidden">
+                    <span className="text-xs text-white font-medium truncate">{session.user?.name}</span>
+                    <button onClick={() => signOut()} className="text-[10px] text-red-400 text-left hover:underline">Logout</button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button 
+                onClick={() => signIn('google')}
+                className={`flex items-center gap-3 p-2.5 bg-blue-600 hover:bg-blue-700 rounded-xl w-full text-xs text-white transition-colors font-medium ${isSidebarOpen ? 'justify-start' : 'justify-center'}`}
+              >
+                <User className="w-4 h-4 shrink-0" />
+                {isSidebarOpen && <span>Login</span>}
+              </button>
+            )}
+          </div>
+
+          <button onClick={() => setIsHelpOpen(true)} className="flex items-center gap-3 p-2.5 hover:bg-[#333538] rounded-xl w-full text-sm text-[#e3e3e3] transition-colors">
             <HelpCircle className="w-5 h-5 shrink-0" />
             <span className={`${isSidebarOpen ? 'block' : 'hidden'}`}>Help</span>
           </button>
-          <button 
-            onClick={() => setIsActivityOpen(true)} 
-            className="flex items-center gap-3 p-2.5 hover:bg-[#333538] rounded-xl w-full text-sm text-[#e3e3e3] transition-colors"
-          >
+          
+          <button onClick={() => setIsActivityOpen(true)} className="flex items-center gap-3 p-2.5 hover:bg-[#333538] rounded-xl w-full text-sm text-[#e3e3e3] transition-colors">
             <History className="w-5 h-5 shrink-0" />
             <span className={`${isSidebarOpen ? 'block' : 'hidden'}`}>Activity</span>
           </button>
-          <button 
-            onClick={() => setIsSettingsOpen(true)} 
-            className="flex items-center gap-3 p-2.5 hover:bg-[#333538] rounded-xl w-full text-sm text-[#e3e3e3] transition-colors group"
-          >
+
+          <button onClick={() => setIsSettingsOpen(true)} className="flex items-center gap-3 p-2.5 hover:bg-[#333538] rounded-xl w-full text-sm text-[#e3e3e3] transition-colors group">
             <Settings className="w-5 h-5 shrink-0 group-hover:rotate-45 transition-transform duration-300" />
             <span className={`${isSidebarOpen ? 'block' : 'hidden'}`}>Settings</span>
           </button>
