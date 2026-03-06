@@ -51,49 +51,36 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
   }, []);
 
   useEffect(() => {
-    const initSocket = async () => {
-      await fetch('/api/socket');
+    socket = io({
+      transports: ['websocket', 'polling'], 
+      reconnection: true
+    });
 
-      socket = io({
-        path: '/api/socket',
-        transports: ['polling', 'websocket'], 
-        reconnection: true,
-        reconnectionAttempts: 5,
-        upgrade: true,
+    socket.on('receiveMessageChunk', (data: { text: string, chatId: string }) => {
+      if (data.chatId) setCurrentChatId(data.chatId);
+
+      setMessages((prev) => {
+        const newMessages = [...prev];
+        const lastMessage = newMessages[newMessages.length - 1];
+        if (lastMessage && lastMessage.role === 'manee') {
+          lastMessage.content += data.text;
+        } else {
+          newMessages.push({ role: 'manee', content: data.text });
+        }
+        return newMessages;
       });
+    });
 
-      socket.on('connect', () => {
-        console.log('Manee Socket Connected');
-      });
+    socket.on('messageComplete', () => {
+      setIsTyping(false);
+      window.dispatchEvent(new Event('refreshHistory'));
+    });
 
-      socket.on('receiveMessageChunk', (data: { text: string, chatId: string }) => {
-        if (data.chatId) setCurrentChatId(data.chatId);
-
-        setMessages((prev) => {
-          const newMessages = [...prev];
-          const lastMessage = newMessages[newMessages.length - 1];
-
-          if (lastMessage && lastMessage.role === 'manee') {
-            lastMessage.content += data.text;
-          } else {
-            newMessages.push({ role: 'manee', content: data.text });
-          }
-          return newMessages;
-        });
-      });
-
-      socket.on('messageComplete', () => {
-        setIsTyping(false);
-        window.dispatchEvent(new Event('refreshHistory'));
-      });
-
-      socket.on('connect_error', async (err: any) => {
-        console.error("Socket 400/Connection Error, Retrying...");
-        await fetch('/api/socket'); 
-      });
-    };
-
-    initSocket();
+    socket.on('error', (err: any) => {
+      console.error("Socket Error:", err);
+      setIsTyping(false);
+      setMessages((prev) => [...prev, { role: 'manee', content: 'Manee connection error. Please refresh.' }]);
+    });
 
     return () => {
       if (socket) socket.disconnect();
@@ -106,12 +93,10 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
 
   const handleSendMessage = () => {
     if (!input.trim() || isTyping) return;
-
     const userPrompt = input;
     setMessages((prev) => [...prev, { role: 'user', content: userPrompt }]);
     setIsTyping(true);
     setInput('');
-
     socket.emit('sendMessage', { 
       prompt: userPrompt, 
       chatId: currentChatId,
@@ -133,11 +118,11 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
   ];
 
   return (
-    <main className="flex-1 flex flex-col relative w-full overflow-hidden transition-all duration-300">
+    <main className="flex-1 flex flex-col relative w-full overflow-hidden transition-all duration-300 bg-white dark:bg-[#131314]">
       <header className="flex justify-between items-center p-4 h-[64px]">
         <div className="flex items-center">
            {!isSidebarOpen && isMobile && (
-              <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 hover:bg-[#333538] rounded-full transition-colors mr-2">
+              <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 hover:bg-[#333538] rounded-full mr-2">
                 <Menu className="w-5 h-5 text-[#c4c7c5]" />
               </button>
            )}
@@ -145,7 +130,7 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
         </div>
         
         <div className="flex items-center gap-4 relative" ref={dropdownRef}>
-          <button className="bg-[#1e1f20] hover:bg-[#333538] text-sm px-4 py-2 rounded-lg font-medium transition-colors hidden sm:block text-[#e3e3e3]">
+          <button className="bg-[#1e1f20] hover:bg-[#333538] text-sm px-4 py-2 rounded-lg font-medium hidden sm:block text-[#e3e3e3]">
             Try Manee Advanced
           </button>
           
@@ -186,27 +171,21 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
 
       <div className="flex-1 overflow-y-auto w-full flex flex-col pb-32 scrollbar-thin scrollbar-thumb-gray-700">
         <div className="flex-1 flex flex-col max-w-[800px] w-full mx-auto px-4 mt-8 md:mt-12">
-          
           {messages.length === 0 ? (
             <>
               <div className="mb-12">
                 <h1 className="text-5xl md:text-6xl mb-2 bg-gradient-to-r from-[#4285f4] via-[#d96570] to-[#d96570] text-transparent bg-clip-text inline-block tracking-tight font-medium">
                   Hello, {session?.user?.name?.split(' ')[0] || 'there'}
                 </h1>
-                <p className="text-4xl md:text-5xl text-[#444746] mt-1 tracking-tight font-medium">
-                  How can I help you today?
-                </p>
+                <p className="text-4xl md:text-5xl text-[#444746] mt-1 tracking-tight font-medium">How can I help you today?</p>
               </div>
-
               <div className="hidden md:grid grid-cols-4 gap-4 w-full">
                 {suggestionCards.map((card, i) => (
-                  <div key={i} onClick={() => setInput(card.text)} className="relative bg-[#1e1f20] hover:bg-[#333538] cursor-pointer rounded-2xl h-[200px] overflow-hidden group transition-all duration-300 shadow-sm border border-transparent hover:border-gray-700">
+                  <div key={i} onClick={() => setInput(card.text)} className="relative bg-[#1e1f20] hover:bg-[#333538] cursor-pointer rounded-2xl h-[200px] overflow-hidden group transition-all duration-300 border border-transparent hover:border-gray-700 shadow-sm">
                     <div className="absolute inset-0 bg-cover bg-center opacity-20 group-hover:opacity-30 transition-opacity duration-300" style={{ backgroundImage: `url('${card.img}')` }} />
                     <div className="relative h-full p-5 flex flex-col justify-between z-10">
-                      <p className="text-[#e3e3e3] text-[15px] font-medium leading-snug drop-shadow-md">{card.text}</p>
-                      <div className="self-end bg-[#131314] p-2.5 rounded-full shadow-lg group-hover:bg-[#1e1f20] transition-colors">
-                        {card.icon}
-                      </div>
+                      <p className="text-[#e3e3e3] text-[15px] font-medium leading-snug">{card.text}</p>
+                      <div className="self-end bg-[#131314] p-2.5 rounded-full group-hover:bg-[#1e1f20] transition-colors shadow-lg">{card.icon}</div>
                     </div>
                   </div>
                 ))}
@@ -223,14 +202,8 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
                   )}
                   <div className={`leading-relaxed ${msg.role === 'user' ? 'bg-[#2a2b2f] text-[#e3e3e3] px-5 py-3 rounded-[24px] max-w-[85%] md:max-w-[75%]' : 'bg-transparent text-[#e3e3e3] w-full max-w-full'}`}>
                     {msg.role === 'manee' ? (
-                      <article className="prose prose-invert max-w-none 
-                        prose-p:text-[16px] prose-p:leading-7 prose-p:text-[#e3e3e3] prose-p:mb-4
-                        prose-headings:text-[#e3e3e3] prose-headings:font-semibold prose-headings:mb-3 prose-headings:mt-6
-                        prose-strong:text-white prose-strong:font-bold
-                        prose-ul:my-4 prose-li:my-1 prose-li:text-[#e3e3e3]">
-                        <ReactMarkdown 
-                          remarkPlugins={[remarkGfm]}
-                          components={{
+                      <article className="prose prose-invert max-w-none prose-p:text-[16px] prose-p:leading-7 prose-p:text-[#e3e3e3] prose-p:mb-4">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
                             code({node, className, children, ...props}) {
                               const match = /language-(\w+)/.exec(className || '');
                               const codeString = String(children).replace(/\n$/, '');
@@ -238,31 +211,20 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
                                 <div className="relative group my-6 rounded-xl overflow-hidden border border-white/10 shadow-2xl">
                                   <div className="flex justify-between items-center bg-[#2d2d2d] px-4 py-2 border-b border-white/5">
                                     <span className="text-xs font-mono text-gray-400 uppercase tracking-widest">{match[1]}</span>
-                                    <button 
-                                      onClick={() => copyToClipboard(codeString, idx)}
-                                      className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-all"
-                                    >
+                                    <button onClick={() => copyToClipboard(codeString, idx)} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-all">
                                       {copiedIndex === idx ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
                                       {copiedIndex === idx ? 'Copied!' : 'Copy code'}
                                     </button>
                                   </div>
-                                  <SyntaxHighlighter
-                                    style={oneDark as any}
-                                    language={match[1]}
-                                    PreTag="div"
-                                    customStyle={{ margin: 0, padding: '1.5rem', fontSize: '14px', lineHeight: '1.6' }}
-                                  >
+                                  <SyntaxHighlighter style={oneDark as any} language={match[1]} PreTag="div" customStyle={{ margin: 0, padding: '1.5rem', fontSize: '14px' }}>
                                     {codeString}
                                   </SyntaxHighlighter>
                                 </div>
                               ) : (
-                                <code className="bg-blue-500/10 text-[#4285f4] px-1.5 py-0.5 rounded-md font-mono text-sm border border-blue-500/20" {...props}>
-                                  {children}
-                                </code>
+                                <code className="bg-blue-500/10 text-[#4285f4] px-1.5 py-0.5 rounded-md font-mono text-sm border border-blue-500/20" {...props}>{children}</code>
                               );
                             }
-                          }}
-                        >
+                          }}>
                           {msg.content}
                         </ReactMarkdown>
                       </article>
@@ -275,11 +237,11 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
               {isTyping && (
                 <div className="flex items-center gap-4 text-[#c4c7c5] ml-[52px]">
                    <div className="flex gap-1.5 items-center">
-                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
-                      <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                      <div className="w-2 h-2 bg-red-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce delay-75"></div>
+                      <div className="w-2 h-2 bg-red-400 rounded-full animate-bounce delay-150"></div>
                    </div>
-                   <span className="text-sm font-medium tracking-tight opacity-70">Manee is thinking...</span>
+                   <span className="text-sm font-medium opacity-70">Manee is thinking...</span>
                 </div>
               )}
               <div ref={messagesEndRef} />
@@ -288,46 +250,20 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
         </div>
       </div>
 
-      <div className="w-full mx-auto pb-6 pt-2 px-4 md:px-6 absolute bottom-0 bg-gradient-to-t from-[#131314] via-[#131314] to-transparent">
+      <div className="w-full mx-auto pb-6 pt-2 px-4 absolute bottom-0 bg-gradient-to-t from-[#131314] via-[#131314] to-transparent">
         <div className="max-w-[800px] mx-auto">
-          <div className="bg-[#1e1f20] rounded-[28px] p-2 pr-3 flex items-end focus-within:bg-[#2a2b2f] transition-all duration-300 border border-transparent focus-within:border-white/10 shadow-2xl">
-            <button className="p-3 hover:bg-[#3c3d3f] rounded-full transition-colors shrink-0 text-[#c4c7c5]">
-              <ImageIcon className="w-5 h-5" />
-            </button>
-            
-            <textarea 
-              rows={1}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
-              }}
-              placeholder="Ask Manee..." 
-              className="flex-1 bg-transparent border-none outline-none text-[#e3e3e3] placeholder-[#c4c7c5] px-2 text-[16px] resize-none max-h-[200px] py-3 flex items-center"
-            />
-            
+          <div className="bg-[#1e1f20] rounded-[28px] p-2 pr-3 flex items-end focus-within:bg-[#2a2b2f] transition-all border border-transparent focus-within:border-white/10 shadow-2xl">
+            <button className="p-3 hover:bg-[#3c3d3f] rounded-full shrink-0 text-[#c4c7c5]"><ImageIcon className="w-5 h-5" /></button>
+            <textarea rows={1} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} placeholder="Ask Manee..." className="flex-1 bg-transparent border-none outline-none text-[#e3e3e3] px-2 text-[16px] resize-none max-h-[200px] py-3 flex items-center" />
             <div className="flex items-center gap-1 shrink-0 pb-1">
               {!input.trim() ? (
-                <button className="p-3 hover:bg-[#3c3d3f] rounded-full transition-colors text-[#c4c7c5]">
-                  <Mic className="w-5 h-5" />
-                </button>
+                <button className="p-3 hover:bg-[#3c3d3f] rounded-full text-[#c4c7c5]"><Mic className="w-5 h-5" /></button>
               ) : (
-                <button 
-                  onClick={handleSendMessage}
-                  disabled={isTyping}
-                  className={`p-3 rounded-full transition-all duration-300 ${isTyping ? 'bg-transparent text-gray-600' : 'bg-white text-black hover:bg-gray-200'}`}
-                >
-                  <Send className="w-5 h-5" />
-                </button>
+                <button onClick={handleSendMessage} disabled={isTyping} className={`p-3 rounded-full transition-all ${isTyping ? 'bg-transparent text-gray-600' : 'bg-white text-black hover:bg-gray-200'}`}><Send className="w-5 h-5" /></button>
               )}
             </div>
           </div>
-          <p className="text-[11px] text-center text-[#9aa0a6] mt-3">
-            Manee can make mistakes. Check important info.
-          </p>
+          <p className="text-[11px] text-center text-[#9aa0a6] mt-3">Manee can make mistakes. Check important info.</p>
         </div>
       </div>
     </main>
