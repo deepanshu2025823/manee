@@ -51,8 +51,9 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
   }, []);
 
   useEffect(() => {
-    const initSocket = async () => {
-      await fetch('/api/socket'); 
+    const socketInitializer = async () => {
+      await fetch('/api/socket');
+      
       socket = io({
         path: '/api/socket',
         addTrailingSlash: false,
@@ -80,13 +81,13 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
       });
 
       socket.on('error', (err: any) => {
-        console.error(err);
+        console.error("Socket Error:", err);
         setIsTyping(false);
         setMessages((prev) => [...prev, { role: 'manee', content: 'Oops! Manee is having trouble connecting to the database.' }]);
       });
     };
 
-    initSocket();
+    socketInitializer();
 
     return () => {
       if (socket) socket.disconnect();
@@ -145,14 +146,14 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
           <div className="relative">
             <button 
               onClick={() => setShowProfileDropdown(!showProfileDropdown)}
-              className="w-8 h-8 rounded-full overflow-hidden border border-white/10 shadow-md hover:ring-2 hover:ring-blue-500/50 transition-all flex items-center justify-center bg-blue-500"
+              className="w-9 h-9 rounded-full overflow-hidden border-2 border-white/10 shadow-lg hover:border-blue-500/50 transition-all flex items-center justify-center bg-[#131314]"
             >
               {status === "loading" ? (
                   <Loader2 className="w-4 h-4 animate-spin text-white" />
               ) : session?.user?.image ? (
                   <img src={session.user.image} alt="User" className="w-full h-full object-cover" />
               ) : (
-                  <User className="w-5 h-5 text-white" />
+                  <User className="w-5 h-5 text-[#c4c7c5]" />
               )}
             </button>
 
@@ -165,7 +166,7 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
                 <div className="p-2">
                    <button 
                     onClick={() => signOut()}
-                    className="flex items-center gap-3 w-full px-3 py-2.5 text-sm text-red-400 hover:bg-red-500/10 rounded-xl transition-colors group"
+                    className="flex items-center gap-3 w-full px-3 py-3 text-sm text-red-400 hover:bg-red-500/10 rounded-xl transition-colors group"
                    >
                      <LogOut className="w-4 h-4 group-hover:scale-110 transition-transform" />
                      <span className="font-medium">Logout from Manee</span>
