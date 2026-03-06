@@ -51,37 +51,45 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
   }, []);
 
   useEffect(() => {
-    socket = io();
-
-    socket.on('receiveMessageChunk', (data: { text: string, chatId: string }) => {
-      if (data.chatId) setCurrentChatId(data.chatId);
-
-      setMessages((prev) => {
-        const newMessages = [...prev];
-        const lastMessage = newMessages[newMessages.length - 1];
-
-        if (lastMessage && lastMessage.role === 'manee') {
-          lastMessage.content += data.text;
-        } else {
-          newMessages.push({ role: 'manee', content: data.text });
-        }
-        return newMessages;
+    const initSocket = async () => {
+      await fetch('/api/socket'); 
+      socket = io({
+        path: '/api/socket',
+        addTrailingSlash: false,
       });
-    });
 
-    socket.on('messageComplete', () => {
-      setIsTyping(false);
-      window.dispatchEvent(new Event('refreshHistory'));
-    });
+      socket.on('receiveMessageChunk', (data: { text: string, chatId: string }) => {
+        if (data.chatId) setCurrentChatId(data.chatId);
 
-    socket.on('error', (err: any) => {
-      console.error(err);
-      setIsTyping(false);
-      setMessages((prev) => [...prev, { role: 'manee', content: 'Oops! Manee is having trouble connecting to the database.' }]);
-    });
+        setMessages((prev) => {
+          const newMessages = [...prev];
+          const lastMessage = newMessages[newMessages.length - 1];
+
+          if (lastMessage && lastMessage.role === 'manee') {
+            lastMessage.content += data.text;
+          } else {
+            newMessages.push({ role: 'manee', content: data.text });
+          }
+          return newMessages;
+        });
+      });
+
+      socket.on('messageComplete', () => {
+        setIsTyping(false);
+        window.dispatchEvent(new Event('refreshHistory'));
+      });
+
+      socket.on('error', (err: any) => {
+        console.error(err);
+        setIsTyping(false);
+        setMessages((prev) => [...prev, { role: 'manee', content: 'Oops! Manee is having trouble connecting to the database.' }]);
+      });
+    };
+
+    initSocket();
 
     return () => {
-      socket.disconnect();
+      if (socket) socket.disconnect();
     };
   }, []);
 
@@ -137,32 +145,30 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
           <div className="relative">
             <button 
               onClick={() => setShowProfileDropdown(!showProfileDropdown)}
-              className="w-8 h-8 rounded-full overflow-hidden border border-white/10 shadow-md hover:ring-2 hover:ring-blue-500/50 transition-all"
+              className="w-8 h-8 rounded-full overflow-hidden border border-white/10 shadow-md hover:ring-2 hover:ring-blue-500/50 transition-all flex items-center justify-center bg-blue-500"
             >
               {status === "loading" ? (
-                  <Loader2 className="w-4 h-4 animate-spin text-[#c4c7c5] m-2" />
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
               ) : session?.user?.image ? (
                   <img src={session.user.image} alt="User" className="w-full h-full object-cover" />
               ) : (
-                  <div className="w-full h-full bg-blue-500 flex items-center justify-center">
-                    <User className="w-5 h-5 text-white" />
-                  </div>
+                  <User className="w-5 h-5 text-white" />
               )}
             </button>
 
             {showProfileDropdown && session && (
-              <div className="absolute right-0 mt-2 w-56 bg-[#1e1f20] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 z-[110]">
+              <div className="absolute right-0 mt-3 w-64 bg-[#1e1f20] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 z-[110]">
                 <div className="p-4 border-b border-white/5 bg-[#131314]/50">
                   <p className="text-sm font-semibold text-white truncate">{session.user?.name}</p>
                   <p className="text-[11px] text-[#9aa0a6] truncate">{session.user?.email}</p>
                 </div>
-                <div className="p-1">
+                <div className="p-2">
                    <button 
                     onClick={() => signOut()}
                     className="flex items-center gap-3 w-full px-3 py-2.5 text-sm text-red-400 hover:bg-red-500/10 rounded-xl transition-colors group"
                    >
                      <LogOut className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                     <span>Logout</span>
+                     <span className="font-medium">Logout from Manee</span>
                    </button>
                 </div>
               </div>
