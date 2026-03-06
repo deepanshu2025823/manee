@@ -3,10 +3,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { 
   Menu, Image as ImageIcon, Mic, Send, User, 
-  Mail, Map, FileText, Code, Loader2, Sparkles, Copy, Check 
+  Mail, Map, FileText, Code, Loader2, Sparkles, Copy, Check, LogOut 
 } from 'lucide-react';
 import io from 'socket.io-client';
-import { useSession, signIn } from "next-auth/react"; 
+import { useSession, signIn, signOut } from "next-auth/react"; 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -27,7 +27,9 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
   const [isTyping, setIsTyping] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null); 
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false); 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -37,6 +39,16 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
       return () => clearTimeout(timer);
     }
   }, [status]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowProfileDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     socket = io();
@@ -116,24 +128,44 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
            )}
           <span className="text-xl font-medium text-[#c4c7c5] md:hidden">Manee</span>
         </div>
-        <div className="flex items-center gap-4">
+        
+        <div className="flex items-center gap-4 relative" ref={dropdownRef}>
           <button className="bg-[#1e1f20] hover:bg-[#333538] text-sm px-4 py-2 rounded-lg font-medium transition-colors hidden sm:block text-[#e3e3e3]">
             Try Manee Advanced
           </button>
           
-          <div className="flex items-center gap-2">
-            {status === "loading" ? (
-                <Loader2 className="w-4 h-4 animate-spin text-[#c4c7c5]" />
-            ) : session ? (
-                <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full overflow-hidden border border-white/10 shadow-md">
-                        <img src={session.user?.image!} alt="User" className="w-full h-full object-cover" />
-                    </div>
+          <div className="relative">
+            <button 
+              onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+              className="w-8 h-8 rounded-full overflow-hidden border border-white/10 shadow-md hover:ring-2 hover:ring-blue-500/50 transition-all"
+            >
+              {status === "loading" ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-[#c4c7c5] m-2" />
+              ) : session?.user?.image ? (
+                  <img src={session.user.image} alt="User" className="w-full h-full object-cover" />
+              ) : (
+                  <div className="w-full h-full bg-blue-500 flex items-center justify-center">
+                    <User className="w-5 h-5 text-white" />
+                  </div>
+              )}
+            </button>
+
+            {showProfileDropdown && session && (
+              <div className="absolute right-0 mt-2 w-56 bg-[#1e1f20] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 z-[110]">
+                <div className="p-4 border-b border-white/5 bg-[#131314]/50">
+                  <p className="text-sm font-semibold text-white truncate">{session.user?.name}</p>
+                  <p className="text-[11px] text-[#9aa0a6] truncate">{session.user?.email}</p>
                 </div>
-            ) : (
-                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center cursor-pointer overflow-hidden shadow-md">
-                   <User className="w-5 h-5 text-white" />
+                <div className="p-1">
+                   <button 
+                    onClick={() => signOut()}
+                    className="flex items-center gap-3 w-full px-3 py-2.5 text-sm text-red-400 hover:bg-red-500/10 rounded-xl transition-colors group"
+                   >
+                     <LogOut className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                     <span>Logout</span>
+                   </button>
                 </div>
+              </div>
             )}
           </div>
         </div>
