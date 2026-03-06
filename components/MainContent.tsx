@@ -51,12 +51,19 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
   }, []);
 
   useEffect(() => {
-    const socketInitializer = async () => {
+    const initSocket = async () => {
       await fetch('/api/socket');
-      
+
       socket = io({
         path: '/api/socket',
-        addTrailingSlash: false,
+        transports: ['polling', 'websocket'], 
+        reconnection: true,
+        reconnectionAttempts: 5,
+        upgrade: true,
+      });
+
+      socket.on('connect', () => {
+        console.log('Manee Socket Connected');
       });
 
       socket.on('receiveMessageChunk', (data: { text: string, chatId: string }) => {
@@ -80,14 +87,13 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
         window.dispatchEvent(new Event('refreshHistory'));
       });
 
-      socket.on('error', (err: any) => {
-        console.error("Socket Error:", err);
-        setIsTyping(false);
-        setMessages((prev) => [...prev, { role: 'manee', content: 'Oops! Manee is having trouble connecting to the database.' }]);
+      socket.on('connect_error', async (err: any) => {
+        console.error("Socket 400/Connection Error, Retrying...");
+        await fetch('/api/socket'); 
       });
     };
 
-    socketInitializer();
+    initSocket();
 
     return () => {
       if (socket) socket.disconnect();
