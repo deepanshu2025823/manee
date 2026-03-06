@@ -6,6 +6,7 @@ import {
   Mail, Map, FileText, Code, Loader2, Sparkles, Copy, Check 
 } from 'lucide-react';
 import io from 'socket.io-client';
+import { useSession } from "next-auth/react"; 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -20,6 +21,7 @@ interface MainContentProps {
 }
 
 export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile }: MainContentProps) {
+  const { data: session } = useSession(); 
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<{ role: string, content: string }[]>([]);
   const [isTyping, setIsTyping] = useState(false);
@@ -76,7 +78,8 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
 
     socket.emit('sendMessage', { 
       prompt: userPrompt, 
-      chatId: currentChatId 
+      chatId: currentChatId,
+      userEmail: session?.user?.email || 'guest' 
     });
   };
 
@@ -109,7 +112,11 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
             Try Manee Advanced
           </button>
           <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center cursor-pointer overflow-hidden shadow-md">
-            <User className="w-5 h-5 text-white" />
+            {session?.user?.image ? (
+                <img src={session.user.image} alt="User" className="w-full h-full object-cover" />
+            ) : (
+                <User className="w-5 h-5 text-white" />
+            )}
           </div>
         </div>
       </header>
@@ -121,7 +128,7 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
             <>
               <div className="mb-12">
                 <h1 className="text-5xl md:text-6xl mb-2 bg-gradient-to-r from-[#4285f4] via-[#d96570] to-[#d96570] text-transparent bg-clip-text inline-block tracking-tight font-medium">
-                  Hello, there
+                  Hello, {session?.user?.name?.split(' ')[0] || 'there'}
                 </h1>
                 <p className="text-4xl md:text-5xl text-[#444746] mt-1 tracking-tight font-medium">
                   How can I help you today?
