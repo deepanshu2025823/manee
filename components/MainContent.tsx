@@ -48,16 +48,37 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const fetchChatMessages = async (chatId: string) => {
+    setIsTyping(true);
+    setCurrentChatId(chatId);
+    try {
+      const res = await fetch(`/api/messages?chatId=${chatId}`);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setMessages(data.map((m: any) => ({ role: m.role, content: m.content })));
+      }
+    } catch (error) {
+      console.error("Failed to fetch messages:", error);
+    }
+    setIsTyping(false);
+  };
+
   useEffect(() => {
-    const URL = process.env.NODE_ENV === 'production' 
-      ? 'https://manee-w96r.onrender.com' 
+    const socketUrl = process.env.NODE_ENV === 'production' 
+      ? 'https://manee-j6g5.onrender.com/' 
       : 'http://localhost:3000';
 
-    socket = io(URL, {
+    socket = io(socketUrl, {
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: 5
     });
+
+    const handleLoadChat = (e: any) => {
+      fetchChatMessages(e.detail.chatId);
+      if (isMobile) setIsSidebarOpen(false); 
+    };
+    window.addEventListener('loadChat', handleLoadChat);
 
     socket.on('receiveMessageChunk', (data: { text: string, chatId: string }) => {
       if (data.chatId) setCurrentChatId(data.chatId);
@@ -78,14 +99,16 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
       window.dispatchEvent(new Event('refreshHistory'));
     });
 
-    socket.on('connect_error', (err: any) => {
-      console.error("Socket connection failed:", err.message);
+    socket.on('error', (err: any) => {
+      console.error("Socket Error:", err);
+      setIsTyping(false);
     });
 
     return () => {
+      window.removeEventListener('loadChat', handleLoadChat);
       if (socket) socket.disconnect();
     };
-  }, []);
+  }, [isMobile]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -118,7 +141,7 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
   ];
 
   return (
-    <main className="flex-1 flex flex-col relative w-full overflow-hidden transition-all duration-300 bg-dark dark:bg-[#131314]">
+    <main className="flex-1 flex flex-col relative w-full overflow-hidden transition-all duration-300 bg-white dark:bg-[#131314]">
       <header className="flex justify-between items-center p-4 h-[64px]">
         <div className="flex items-center">
            {!isSidebarOpen && isMobile && (
@@ -241,7 +264,7 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
                       <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce delay-75"></div>
                       <div className="w-2 h-2 bg-red-400 rounded-full animate-bounce delay-150"></div>
                    </div>
-                   <span className="text-sm font-medium opacity-70">Manee is thinking...</span>
+                   <span className="text-sm font-medium opacity-70">Manee is active...</span>
                 </div>
               )}
               <div ref={messagesEndRef} />

@@ -5,28 +5,30 @@ import { getServerSession } from "next-auth/next";
 const pool = require('@/lib/db');
 
 export async function GET() {
-    const session = await getServerSession();
-    const userEmail = session?.user?.email || 'guest';
-
     try {
+        const session = await getServerSession();
+        const userEmail = session?.user?.email || 'guest';
+
+        if (!pool) throw new Error("Database pool not initialized");
+
         const [rows] = await pool.query(
             'SELECT * FROM chats WHERE user_email = ? ORDER BY created_at DESC', 
             [userEmail]
         );
         return NextResponse.json(rows);
-    } catch (error) {
-        console.error("Fetch Error:", error);
-        return NextResponse.json({ error: "Failed to fetch history" }, { status: 500 });
+    } catch (error: any) {
+        console.error("Fetch Error details:", error.message);
+        return NextResponse.json({ error: error.message || "Failed to fetch history" }, { status: 500 });
     }
 }
 
 export async function DELETE(request: Request) {
-    const session = await getServerSession();
-    const userEmail = session?.user?.email || 'guest';
-    const { searchParams } = new URL(request.url);
-    const chatId = searchParams.get('chatId');
-
     try {
+        const session = await getServerSession();
+        const userEmail = session?.user?.email || 'guest';
+        const { searchParams } = new URL(request.url);
+        const chatId = searchParams.get('chatId');
+
         if (chatId) {
             await pool.query(
                 'DELETE FROM chats WHERE chat_id = ? AND user_email = ?', 
