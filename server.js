@@ -25,7 +25,7 @@ app.prepare().then(() => {
 
   const io = new Server(httpServer, { 
     cors: { 
-      origin: ["https://manee-j6g5.onrender.com", "http://localhost:3000"], 
+      origin: ["https://manee-two.vercel.app", "http://localhost:3000"], 
       methods: ["GET", "POST"]
     },
     pingTimeout: 60000,
