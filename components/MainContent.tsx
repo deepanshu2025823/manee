@@ -118,7 +118,7 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
   ];
 
   return (
-    <main className="flex-1 flex flex-col relative w-full overflow-hidden transition-all duration-300 bg-white dark:bg-[#131314]">
+    <main className="flex-1 flex flex-col relative w-full overflow-hidden transition-all duration-300 bg-dark dark:bg-[#131314]">
       <header className="flex justify-between items-center p-4 h-[64px]">
         <div className="flex items-center">
            {!isSidebarOpen && isMobile && (
