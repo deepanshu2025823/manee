@@ -25,13 +25,30 @@ app.prepare().then(() => {
 
   const io = new Server(httpServer, { 
     cors: { 
-      origin: dev ? "*" : ["https://manee-w96r.onrender.com", "https://localhost:3000"], 
+      origin: ["https://manee-w96r.onrender.com", "http://localhost:3000"], 
       methods: ["GET", "POST"]
     } 
   });
 
   io.on('connection', (socket) => {
     console.log('User connected to Manee AI:', socket.id);
+
+    socket.on('loadChatHistory', async ({ chatId, userEmail }) => {
+      try {
+        const [messages] = await pool.query(
+          `SELECT role, content FROM messages m 
+           JOIN chats c ON m.chat_id = c.chat_id 
+           WHERE m.chat_id = ? AND c.user_email = ? 
+           ORDER BY m.id ASC`, 
+          [chatId, userEmail || 'guest']
+        );
+        
+        socket.emit('chatHistoryLoaded', { messages, chatId });
+      } catch (error) {
+        console.error('History Load Error:', error);
+        socket.emit('error', { message: 'Could not load messages.' });
+      }
+    });
 
     socket.on('sendMessage', async (data) => {
       const { prompt, chatId = uuidv4(), userEmail = 'guest' } = data;
@@ -48,7 +65,7 @@ app.prepare().then(() => {
           [chatId, 'user', prompt]
         );
 
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
         const result = await model.generateContentStream(prompt);
 
         let fullManeeResponse = "";

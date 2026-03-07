@@ -23,7 +23,7 @@ interface MainContentProps {
 export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile }: MainContentProps) {
   const { data: session, status } = useSession(); 
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<{ role: string, content: string }[]>([]);
+  const [messages, setMessages] = useState<any[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null); 
@@ -33,9 +33,7 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      const timer = setTimeout(() => {
-        signIn('google'); 
-      }, 1500);
+      const timer = setTimeout(() => { signIn('google'); }, 1500);
       return () => clearTimeout(timer);
     }
   }, [status]);
@@ -51,14 +49,18 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
   }, []);
 
   useEffect(() => {
-    socket = io({
-      transports: ['websocket', 'polling'], 
-      reconnection: true
+    const URL = process.env.NODE_ENV === 'production' 
+      ? 'https://manee-w96r.onrender.com' 
+      : 'http://localhost:3000';
+
+    socket = io(URL, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 5
     });
 
     socket.on('receiveMessageChunk', (data: { text: string, chatId: string }) => {
       if (data.chatId) setCurrentChatId(data.chatId);
-
       setMessages((prev) => {
         const newMessages = [...prev];
         const lastMessage = newMessages[newMessages.length - 1];
@@ -76,10 +78,8 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
       window.dispatchEvent(new Event('refreshHistory'));
     });
 
-    socket.on('error', (err: any) => {
-      console.error("Socket Error:", err);
-      setIsTyping(false);
-      setMessages((prev) => [...prev, { role: 'manee', content: 'Manee connection error. Please refresh.' }]);
+    socket.on('connect_error', (err: any) => {
+      console.error("Socket connection failed:", err.message);
     });
 
     return () => {
@@ -118,7 +118,7 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
   ];
 
   return (
-    <main className="flex-1 flex flex-col relative w-full overflow-hidden transition-all duration-300 bg-dark dark:bg-[#131314]">
+    <main className="flex-1 flex flex-col relative w-full overflow-hidden transition-all duration-300 bg-white dark:bg-[#131314]">
       <header className="flex justify-between items-center p-4 h-[64px]">
         <div className="flex items-center">
            {!isSidebarOpen && isMobile && (
