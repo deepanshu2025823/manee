@@ -10,7 +10,7 @@ const { v4: uuidv4 } = require('uuid');
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = '0.0.0.0'; 
-const port = process.env.PORT || 3000; 
+const port = process.env.PORT || 10000; 
 
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
@@ -25,7 +25,7 @@ app.prepare().then(() => {
 
   const io = new Server(httpServer, { 
     cors: { 
-      origin: dev ? "*" : ["https://manee-two.vercel.app", "https://manee.onrender.com"], 
+      origin: dev ? "*" : ["https://manee-w96r.onrender.com", "https://localhost:3000"], 
       methods: ["GET", "POST"]
     } 
   });
