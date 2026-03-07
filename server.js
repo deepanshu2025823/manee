@@ -27,7 +27,9 @@ app.prepare().then(() => {
     cors: { 
       origin: ["https://manee-j6g5.onrender.com", "http://localhost:3000"], 
       methods: ["GET", "POST"]
-    } 
+    },
+    pingTimeout: 60000,
+    connectTimeout: 60000
   });
 
   io.on('connection', (socket) => {
@@ -42,18 +44,16 @@ app.prepare().then(() => {
            ORDER BY m.id ASC`, 
           [chatId, userEmail || 'guest']
         );
-        
         socket.emit('chatHistoryLoaded', { messages, chatId });
       } catch (error) {
-        console.error('History Load Error:', error);
-        socket.emit('error', { message: 'Could not load messages.' });
+        console.error('History Load Error:', error.message);
+        socket.emit('error', { message: 'History fetch failed.' });
       }
     });
 
     socket.on('sendMessage', async (data) => {
       const { prompt, chatId = uuidv4(), userEmail = 'guest' } = data;
-      console.log('User asked Manee:', prompt);
-
+      
       try {
         await pool.query(
           'INSERT IGNORE INTO chats (chat_id, title, user_email) VALUES (?, ?, ?)', 
@@ -65,7 +65,7 @@ app.prepare().then(() => {
           [chatId, 'user', prompt]
         );
 
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
         const result = await model.generateContentStream(prompt);
 
         let fullManeeResponse = "";
@@ -83,8 +83,8 @@ app.prepare().then(() => {
         socket.emit('messageComplete', { chatId });
 
       } catch (error) {
-        console.error('Logic Error:', error);
-        socket.emit('error', { message: 'Manee is having trouble with the database.' });
+        console.error('Logic Error Details:', error.message);
+        socket.emit('error', { message: 'Database sync error. Please try again.' });
       }
     });
 
@@ -93,7 +93,7 @@ app.prepare().then(() => {
     });
   });
 
-  httpServer.listen(port, () => {
+  httpServer.listen(port, hostname, () => {
     console.log(`> Manee AI is live on port ${port}`);
   });
 });
