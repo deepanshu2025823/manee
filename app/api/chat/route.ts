@@ -14,52 +14,66 @@ export async function POST(req: Request) {
         const { prompt, chatId: existingChatId } = await req.json();
         const chatId = existingChatId || uuidv4();
 
-        const imageKeywords = ['generate image', 'create image', 'banao image', 'photo banao', 'generate an image of', 'draw'];
+        const imageKeywords = ['generate', 'create', 'draw', 'banao', 'photo', 'image', 'picture'];
         const isImageRequest = imageKeywords.some(keyword => prompt.toLowerCase().includes(keyword));
 
+        await pool.query('INSERT IGNORE INTO chats (chat_id, title, user_email) VALUES (?, ?, ?)', 
+            [chatId, prompt.substring(0, 50), userEmail]);
+        await pool.query('INSERT INTO messages (chat_id, role, content) VALUES (?, ?, ?)', 
+            [chatId, 'user', prompt]);
+
+        let finalResponseText = "";
+        let generatedImageData = null;
+
         if (isImageRequest) {
-            const seed = Math.floor(Math.random() * 1000000);
-            const encodedPrompt = encodeURIComponent(prompt);
-            const imageUrl = `https://pollinations.ai/p/${encodedPrompt}?width=1024&height=1024&seed=${seed}&nologo=true`;
+            const imgModel = genAI.getGenerativeModel({ model: "gemini-3.1-flash-image-preview" });
+            
+            const result = await imgModel.generateContent(prompt);
+            const response = await result.response;
+            
+            for (const part of response.candidates![0].content.parts) {
+                if (part.text) {
+                    finalResponseText += part.text;
+                } else if (part.inlineData) {
+                    generatedImageData = part.inlineData.data;
+                    const mimeType = part.inlineData.mimeType || "image/png";
+                    
+                    const imgMarkdown = `\n\n![Generated Image](data:${mimeType};base64,${generatedImageData})`;
+                    finalResponseText += imgMarkdown;
+                }
+            }
+        } else {
+            const [rows]: any = await pool.query(
+                'SELECT role, content FROM messages WHERE chat_id = ? ORDER BY id ASC LIMIT 10',
+                [chatId]
+            );
 
-            const imageMarkdown = `![Generated Image](${imageUrl})`;
-            const responseText = `Zaroor! Maine aapke liye ye image generate ki hai: \n\n ${imageMarkdown}`;
+            const history = rows.map((m: any) => ({
+                role: m.role === 'user' ? 'user' : 'model',
+                parts: [{ text: m.content }],
+            }));
 
-            await pool.query('INSERT IGNORE INTO chats (chat_id, title, user_email) VALUES (?, ?, ?)', [chatId, "Image: " + prompt.substring(0, 30), userEmail]);
-            await pool.query('INSERT INTO messages (chat_id, role, content) VALUES (?, ?, ?)', [chatId, 'user', prompt]);
-            await pool.query('INSERT INTO messages (chat_id, role, content) VALUES (?, ?, ?)', [chatId, 'manee', responseText]);
+            const chatModel = genAI.getGenerativeModel({ 
+                model: "gemini-3.1-flash", 
+                systemInstruction: "You are Manee, a helpful, witty AI. Use Hinglish if needed. Be concise." 
+            });
 
-            return NextResponse.json({ text: responseText, chatId });
+            const chatSession = chatModel.startChat({ history });
+            const result = await chatSession.sendMessage(prompt);
+            finalResponseText = result.response.text();
         }
 
-        const [rows]: any = await pool.query(
-            'SELECT role, content FROM messages WHERE chat_id = ? ORDER BY id ASC LIMIT 10',
-            [chatId]
-        );
+        await pool.query('INSERT INTO messages (chat_id, role, content) VALUES (?, ?, ?)', 
+            [chatId, 'manee', finalResponseText]);
 
-        const history = rows.map((m: any) => ({
-            role: m.role === 'user' ? 'user' : 'model',
-            parts: [{ text: m.content }],
-        }));
-
-        await pool.query('INSERT IGNORE INTO chats (chat_id, title, user_email) VALUES (?, ?, ?)', [chatId, prompt.substring(0, 50), userEmail]);
-        await pool.query('INSERT INTO messages (chat_id, role, content) VALUES (?, ?, ?)', [chatId, 'user', prompt]);
-
-        const model = genAI.getGenerativeModel({ 
-            model: "gemini-2.5-flash", 
-            systemInstruction: "You are Manee, a witty and helpful AI. If someone asks to draw or create an image, acknowledge it briefly. Use Hinglish." 
+        return NextResponse.json({ 
+            text: finalResponseText, 
+            chatId,
+            image: generatedImageData 
         });
-
-        const chatSession = model.startChat({ history });
-        const result = await chatSession.sendMessage(prompt);
-        const responseText = result.response.text();
-
-        await pool.query('INSERT INTO messages (chat_id, role, content) VALUES (?, ?, ?)', [chatId, 'manee', responseText]);
-
-        return NextResponse.json({ text: responseText, chatId });
 
     } catch (error: any) {
         console.error('Logic Error:', error.message);
-        return NextResponse.json({ error: 'Mafi chahta hoon, database sync error.' }, { status: 500 });
+        return NextResponse.json({ error: 'Mafi chahta hoon, image generate nahi ho saki.' }, { status: 500 });
     }
 }
