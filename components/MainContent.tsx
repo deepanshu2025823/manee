@@ -129,14 +129,6 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
   return (
     <main className="flex-1 flex flex-col relative w-full overflow-hidden transition-all duration-300 bg-[#131314]">
       <header className="flex justify-between items-center p-4 h-[64px] z-10">
-        <div className="flex items-center">
-          {!isSidebarOpen && (
-            <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 hover:bg-[#333538] rounded-full mr-2 transition-colors">
-              <Menu className="w-5 h-5 text-[#c4c7c5]" />
-            </button>
-          )}
-          <span className="text-xl font-medium text-[#c4c7c5]">Manee</span>
-        </div>
         
         <div className="flex items-center gap-4 relative" ref={dropdownRef}>
           <button className="bg-[#1e1f20] hover:bg-[#333538] text-sm px-4 py-2 rounded-lg font-medium hidden sm:block text-[#e3e3e3] border border-white/5">
