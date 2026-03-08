@@ -27,6 +27,29 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  const fetchChatMessages = async (chatId: string) => {
+    setIsTyping(true);
+    setCurrentChatId(chatId);
+    setMessages([]); 
+    
+    try {
+      const res = await fetch(`/api/messages?chatId=${chatId}`);
+      if (!res.ok) throw new Error("Fetch failed");
+      
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setMessages(data.map((m: any) => ({ 
+          role: m.role === 'assistant' || m.role === 'manee' ? 'manee' : 'user', 
+          content: m.content 
+        })));
+      }
+    } catch (error) {
+      console.error("Failed to fetch messages:", error);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
   useEffect(() => {
     if (status === "unauthenticated") {
       const timer = setTimeout(() => { signIn('google'); }, 1500);
@@ -44,28 +67,11 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const fetchChatMessages = async (chatId: string) => {
-    setIsTyping(true);
-    setCurrentChatId(chatId);
-    try {
-      const res = await fetch(`/api/messages?chatId=${chatId}`);
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setMessages(data.map((m: any) => ({ 
-          role: m.role === 'assistant' || m.role === 'manee' ? 'manee' : 'user', 
-          content: m.content 
-        })));
-      }
-    } catch (error) {
-      console.error("Failed to fetch messages:", error);
-    } finally {
-      setIsTyping(false);
-    }
-  };
-
   useEffect(() => {
     const handleLoadChat = (e: any) => {
-      fetchChatMessages(e.detail.chatId);
+      if (e.detail && e.detail.chatId) {
+        fetchChatMessages(e.detail.chatId);
+      }
     };
     window.addEventListener('loadChat', handleLoadChat);
     return () => window.removeEventListener('loadChat', handleLoadChat);
@@ -131,9 +137,10 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
       <header className="flex justify-between items-center p-4 h-[64px] z-10">
         <div className="flex items-center">
           {!isSidebarOpen && (
-            <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 hover:bg-[#333538] rounded-full mr-2 transition-colors"></button>
+            <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 hover:bg-[#333538] rounded-full mr-2 transition-colors">
+               <Menu className="w-5 h-5 text-[#c4c7c5]" />
+            </button>
           )}
-          <span className="text-xl font-medium text-[#c4c7c5]"></span>
         </div>
         
         <div className="flex items-center gap-4 relative" ref={dropdownRef}>

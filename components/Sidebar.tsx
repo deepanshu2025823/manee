@@ -25,8 +25,11 @@ export default function Sidebar({ isSidebarOpen, setIsSidebarOpen }: SidebarProp
   const fetchHistory = async () => {
     try {
       const res = await fetch('/api/history');
+      if (!res.ok) throw new Error("Failed to fetch history");
       const data = await res.json();
-      if (Array.isArray(data)) setHistory(data);
+      if (Array.isArray(data)) {
+        setHistory(data);
+      }
     } catch (error) { 
       console.error("History fetch error:", error); 
     }
@@ -34,6 +37,7 @@ export default function Sidebar({ isSidebarOpen, setIsSidebarOpen }: SidebarProp
 
   const handleSelectChat = (chatId: string) => {
     setActiveChatId(chatId);
+    
     window.dispatchEvent(new CustomEvent('loadChat', { 
       detail: { chatId: chatId } 
     }));
@@ -45,7 +49,7 @@ export default function Sidebar({ isSidebarOpen, setIsSidebarOpen }: SidebarProp
 
   const deleteChat = async (e: React.MouseEvent, chatId: string) => {
     e.stopPropagation(); 
-    if (!confirm("Delete this chat?")) return;
+    if (!confirm("Is chat ko delete karein?")) return;
     
     try {
       const res = await fetch(`/api/history?chatId=${chatId}`, { method: 'DELETE' });
@@ -62,12 +66,12 @@ export default function Sidebar({ isSidebarOpen, setIsSidebarOpen }: SidebarProp
   };
 
   const clearAllHistory = async () => {
-    if (!confirm("Are you sure you want to clear all history? This cannot be undone.")) return;
+    if (!confirm("Kya aap saari history clear karna chahte hain? Yeh wapas nahi aayegi.")) return;
     
     try {
       const res = await fetch('/api/history', { method: 'DELETE' });
       if (res.ok) {
-        window.location.reload();
+        window.location.reload(); 
       }
     } catch (error) { 
       console.error("Clear history failed:", error); 
@@ -83,17 +87,21 @@ export default function Sidebar({ isSidebarOpen, setIsSidebarOpen }: SidebarProp
   return (
     <>
       <aside className={`${isSidebarOpen ? 'translate-x-0 w-[280px]' : '-translate-x-full w-[280px] md:translate-x-0 md:w-[68px]'} fixed md:relative z-50 h-full bg-[#1e1f20] transition-all duration-300 ease-in-out flex flex-col shrink-0 overflow-hidden border-r border-white/5`}>
+        
         <div className="p-4 flex items-center h-[64px]">
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-[#333538] rounded-full shrink-0 transition-colors">
             <Menu className="w-5 h-5 text-[#c4c7c5]" />
           </button>
-          <span className={`ml-4 text-md font-medium text-white transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 md:hidden'}`}>
+          <span className={`ml-4 text-md font-medium text-white transition-opacity duration-300 whitespace-nowrap ${isSidebarOpen ? 'opacity-100' : 'opacity-0 md:hidden'}`}>
             Manee Ask
           </span>
         </div>
         
         <div className="px-3 mt-2">
-          <button onClick={() => window.location.href = '/'} className={`flex items-center gap-3 bg-[#1a1a1c] hover:bg-[#333538] py-2.5 px-3 rounded-full text-sm font-medium transition-all w-full border border-white/5 ${isSidebarOpen ? 'justify-start' : 'md:justify-center md:px-0 md:w-11'}`}>
+          <button 
+            onClick={() => window.location.href = '/'} 
+            className={`flex items-center gap-3 bg-[#1a1a1c] hover:bg-[#333538] py-2.5 px-3 rounded-full text-sm font-medium transition-all w-full border border-white/5 ${isSidebarOpen ? 'justify-start' : 'md:justify-center md:px-0 md:w-11'}`}
+          >
             <Plus className="w-5 h-5 shrink-0 text-[#c4c7c5]" />
             <span className={`${isSidebarOpen ? 'block' : 'hidden'}`}>New chat</span>
           </button>
@@ -115,7 +123,7 @@ export default function Sidebar({ isSidebarOpen, setIsSidebarOpen }: SidebarProp
                 key={chat.chat_id} 
                 onClick={() => handleSelectChat(chat.chat_id)}
                 className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer text-sm transition-all group ${
-                  activeChatId === chat.chat_id ? 'bg-[#333538] text-white' : 'text-[#e3e3e3] hover:bg-[#333538]'
+                  activeChatId === chat.chat_id ? 'bg-[#333538] text-white shadow-sm' : 'text-[#e3e3e3] hover:bg-[#333538]'
                 }`}
               >
                 <div className="flex items-center gap-3 truncate">
@@ -133,7 +141,10 @@ export default function Sidebar({ isSidebarOpen, setIsSidebarOpen }: SidebarProp
           </div>
 
           {history.length === 0 && (
-            <p className="text-[11px] text-[#9aa0a6] text-center mt-4 italic">History is empty</p>
+            <div className="flex flex-col items-center justify-center mt-10 space-y-2 opacity-50">
+               <History className="w-8 h-8 text-gray-600" />
+               <p className="text-[11px] text-[#9aa0a6] italic">No recent chats</p>
+            </div>
           )}
         </div>
 
