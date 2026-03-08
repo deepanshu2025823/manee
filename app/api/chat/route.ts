@@ -14,71 +14,43 @@ export async function POST(req: Request) {
         const { prompt, chatId: existingChatId } = await req.json();
         const chatId = existingChatId || uuidv4();
 
-        try {
-            await pool.query('INSERT IGNORE INTO chats (chat_id, title, user_email) VALUES (?, ?, ?)', 
-                [chatId, prompt.substring(0, 50), userEmail]);
-            await pool.query('INSERT INTO messages (chat_id, role, content) VALUES (?, ?, ?)', 
-                [chatId, 'user', prompt]);
-        } catch (dbErr) {
-            console.error("DB User Message Error:", dbErr);
-        }
+        const [rows]: any = await pool.query(
+            'SELECT role, content FROM messages WHERE chat_id = ? ORDER BY id ASC LIMIT 10',
+            [chatId]
+        );
 
-        const imageKeywords = ['generate', 'create', 'draw', 'banao', 'photo', 'image'];
-        const isImageRequest = imageKeywords.some(kw => prompt.toLowerCase().includes(kw));
+        const history = rows.map((m: any) => ({
+            role: m.role === 'user' ? 'user' : 'model',
+            parts: [{ text: m.content }],
+        }));
 
-        let responseText = "";
-        
-        if (isImageRequest) {
-            const imgModel = genAI.getGenerativeModel({ model: "gemini-3.1-flash-image-preview" });
-            
-            const result = await imgModel.generateContent({
-                contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                generationConfig: {
-                    // @ts-ignore 
-                    responseModalities: ["TEXT", "IMAGE"],
-                }
-            });
+        await pool.query(
+            'INSERT IGNORE INTO chats (chat_id, title, user_email) VALUES (?, ?, ?)',
+            [chatId, prompt.substring(0, 50), userEmail]
+        );
+        await pool.query(
+            'INSERT INTO messages (chat_id, role, content) VALUES (?, ?, ?)',
+            [chatId, 'user', prompt]
+        );
 
-            const response = await result.response;
-            const candidates = response.candidates;
+        const model = genAI.getGenerativeModel({ 
+            model: "gemini-2.5-flash", 
+            systemInstruction: "You are Manee, a helpful, witty, and grounded AI assistant. Your tone is friendly, like a peer. Use Hinglish if the user talks in Hindi/Urdu. Be concise and authentic." 
+        });
 
-            if (!candidates || candidates.length === 0) {
-                throw new Error("No candidates returned from Image Model");
-            }
+        const chatSession = model.startChat({ history });
+        const result = await chatSession.sendMessage(prompt);
+        const responseText = result.response.text();
 
-            for (const part of candidates[0].content.parts) {
-                if (part.text) {
-                    responseText += part.text;
-                } else if (part.inlineData) {
-                    const base64Data = part.inlineData.data;
-                    const mimeType = part.inlineData.mimeType || 'image/png';
-                    responseText += `\n\n![Generated Image](data:${mimeType};base64,${base64Data})`;
-                }
-            }
-        } else {
-            const chatModel = genAI.getGenerativeModel({ 
-                model: "gemini-1.5-flash", 
-                systemInstruction: "You are Manee, a helpful, witty AI. Use Hinglish if the user talks in Hindi. Be concise." 
-            });
-
-            const result = await chatModel.generateContent(prompt);
-            responseText = result.response.text();
-        }
-
-        try {
-            await pool.query('INSERT INTO messages (chat_id, role, content) VALUES (?, ?, ?)', 
-                [chatId, 'manee', responseText]);
-        } catch (dbErr) {
-            console.error("DB Manee Response Error:", dbErr);
-        }
+        await pool.query(
+            'INSERT INTO messages (chat_id, role, content) VALUES (?, ?, ?)',
+            [chatId, 'manee', responseText]
+        );
 
         return NextResponse.json({ text: responseText, chatId });
 
     } catch (error: any) {
-        console.error('Logic Error Details:', error);
-        return NextResponse.json(
-            { error: `Manee busy hai. Error: ${error.message}` }, 
-            { status: 500 }
-        );
+        console.error('Logic Error:', error.message);
+        return NextResponse.json({ error: 'Mafi chahta hoon, kuch error aa gaya.' }, { status: 500 });
     }
 }
