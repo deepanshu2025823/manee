@@ -1,18 +1,14 @@
 // components/MainContent.tsx
-
 import { useState, useEffect, useRef } from 'react';
 import { 
   Menu, Image as ImageIcon, Mic, Send, User, 
   Mail, Map, FileText, Code, Loader2, Sparkles, Copy, Check, LogOut 
 } from 'lucide-react';
-import io from 'socket.io-client';
 import { useSession, signIn, signOut } from "next-auth/react"; 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
-
-let socket: any;
 
 interface MainContentProps {
   isSidebarOpen: boolean;
@@ -64,67 +60,56 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
   };
 
   useEffect(() => {
-    const socketUrl = process.env.NODE_ENV === 'production' 
-      ? 'https://manee-j6g5.onrender.com/' 
-      : 'http://localhost:3000';
-
-    socket = io(socketUrl, {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: 5
-    });
-
     const handleLoadChat = (e: any) => {
       fetchChatMessages(e.detail.chatId);
       if (isMobile) setIsSidebarOpen(false); 
     };
     window.addEventListener('loadChat', handleLoadChat);
-
-    socket.on('receiveMessageChunk', (data: { text: string, chatId: string }) => {
-      if (data.chatId) setCurrentChatId(data.chatId);
-      setMessages((prev) => {
-        const newMessages = [...prev];
-        const lastMessage = newMessages[newMessages.length - 1];
-        if (lastMessage && lastMessage.role === 'manee') {
-          lastMessage.content += data.text;
-        } else {
-          newMessages.push({ role: 'manee', content: data.text });
-        }
-        return newMessages;
-      });
-    });
-
-    socket.on('messageComplete', () => {
-      setIsTyping(false);
-      window.dispatchEvent(new Event('refreshHistory'));
-    });
-
-    socket.on('error', (err: any) => {
-      console.error("Socket Error:", err);
-      setIsTyping(false);
-    });
-
-    return () => {
-      window.removeEventListener('loadChat', handleLoadChat);
-      if (socket) socket.disconnect();
-    };
-  }, [isMobile]);
+    return () => window.removeEventListener('loadChat', handleLoadChat);
+  }, [isMobile, setIsSidebarOpen]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!input.trim() || isTyping) return;
+    
     const userPrompt = input;
+    const tempChatId = currentChatId;
+    
     setMessages((prev) => [...prev, { role: 'user', content: userPrompt }]);
     setIsTyping(true);
     setInput('');
-    socket.emit('sendMessage', { 
-      prompt: userPrompt, 
-      chatId: currentChatId,
-      userEmail: session?.user?.email || 'guest' 
-    });
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          prompt: userPrompt, 
+          chatId: tempChatId,
+          userEmail: session?.user?.email || 'guest' 
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.text) {
+        if (data.chatId) setCurrentChatId(data.chatId);
+        
+        setMessages((prev) => [...prev, { role: 'manee', content: data.text }]);
+        
+        window.dispatchEvent(new Event('refreshHistory'));
+      } else {
+        throw new Error(data.error || "Failed to get response");
+      }
+    } catch (error: any) {
+      console.error("API Error:", error);
+      setMessages((prev) => [...prev, { role: 'manee', content: "Sorry, I encountered a database sync error. Please try again." }]);
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   const copyToClipboard = (text: string, index: number) => {
@@ -136,7 +121,7 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
   const suggestionCards = [
     { text: 'Draft an email', img: 'https://images.unsplash.com/photo-1555421689-491a97ff2040?auto=format&fit=crop&w=400&q=80', icon: <Mail className="w-4 h-4 text-[#c4c7c5]" /> },
     { text: 'Create an itinerary', img: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=400&q=80', icon: <Map className="w-4 h-4 text-[#c4c7c5]" /> },
-    { text: 'Summarize a text', img: 'https://img.freepik.com/free-photo/business-woman-working_1303-5992.jpg?t=st=1772825482~exp=1772829082~hmac=f6e50d558274e63db357e21e4bb004fcf9f4bb5890e5c05319c0528525cf7a5a&w=1480', icon: <FileText className="w-4 h-4 text-[#c4c7c5]" /> },
+    { text: 'Summarize a text', img: 'https://img.freepik.com/free-photo/business-woman-working_1303-5992.jpg?w=1480', icon: <FileText className="w-4 h-4 text-[#c4c7c5]" /> },
     { text: 'Write some code', img: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&w=400&q=80', icon: <Code className="w-4 h-4 text-[#c4c7c5]" /> }
   ];
 
@@ -277,7 +262,14 @@ export default function MainContent({ isSidebarOpen, setIsSidebarOpen, isMobile 
         <div className="max-w-[800px] mx-auto">
           <div className="bg-[#1e1f20] rounded-[28px] p-2 pr-3 flex items-end focus-within:bg-[#2a2b2f] transition-all border border-transparent focus-within:border-white/10 shadow-2xl">
             <button className="p-3 hover:bg-[#3c3d3f] rounded-full shrink-0 text-[#c4c7c5]"><ImageIcon className="w-5 h-5" /></button>
-            <textarea rows={1} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} placeholder="Ask Manee..." className="flex-1 bg-transparent border-none outline-none text-[#e3e3e3] px-2 text-[16px] resize-none max-h-[200px] py-3 flex items-center" />
+            <textarea 
+              rows={1} 
+              value={input} 
+              onChange={(e) => setInput(e.target.value)} 
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} 
+              placeholder="Ask Manee..." 
+              className="flex-1 bg-transparent border-none outline-none text-[#e3e3e3] px-2 text-[16px] resize-none max-h-[200px] py-3 flex items-center" 
+            />
             <div className="flex items-center gap-1 shrink-0 pb-1">
               {!input.trim() ? (
                 <button className="p-3 hover:bg-[#3c3d3f] rounded-full text-[#c4c7c5]"><Mic className="w-5 h-5" /></button>
