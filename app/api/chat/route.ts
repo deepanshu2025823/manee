@@ -15,7 +15,6 @@ export async function POST(req: Request) {
         const userEmail = session?.user?.email || 'guest';
         const { prompt, chatId = uuidv4() } = await req.json();
 
-        // Database mein entry
         await pool.query(
             'INSERT IGNORE INTO chats (chat_id, title, user_email) VALUES (?, ?, ?)',
             [chatId, prompt.substring(0, 50), userEmail]
