@@ -14,66 +14,42 @@ export async function POST(req: Request) {
         const { prompt, chatId: existingChatId } = await req.json();
         const chatId = existingChatId || uuidv4();
 
-        const imageKeywords = ['generate', 'create', 'draw', 'banao', 'photo', 'image', 'picture'];
-        const isImageRequest = imageKeywords.some(keyword => prompt.toLowerCase().includes(keyword));
-
         await pool.query('INSERT IGNORE INTO chats (chat_id, title, user_email) VALUES (?, ?, ?)', 
             [chatId, prompt.substring(0, 50), userEmail]);
         await pool.query('INSERT INTO messages (chat_id, role, content) VALUES (?, ?, ?)', 
             [chatId, 'user', prompt]);
 
-        let finalResponseText = "";
-        let generatedImageData = null;
+        const imageKeywords = ['generate', 'create', 'draw', 'banao', 'photo', 'image'];
+        const isImageRequest = imageKeywords.some(kw => prompt.toLowerCase().includes(kw));
 
-        if (isImageRequest) {
-            const imgModel = genAI.getGenerativeModel({ model: "gemini-3.1-flash-image-preview" });
-            
-            const result = await imgModel.generateContent(prompt);
-            const response = await result.response;
-            
-            for (const part of response.candidates![0].content.parts) {
-                if (part.text) {
-                    finalResponseText += part.text;
-                } else if (part.inlineData) {
-                    generatedImageData = part.inlineData.data;
-                    const mimeType = part.inlineData.mimeType || "image/png";
-                    
-                    const imgMarkdown = `\n\n![Generated Image](data:${mimeType};base64,${generatedImageData})`;
-                    finalResponseText += imgMarkdown;
-                }
+        let responseText = "";
+        let modelId = isImageRequest ? "gemini-3.1-flash-image-preview" : "gemini-1.5-flash";
+
+        const model = genAI.getGenerativeModel({ 
+            model: modelId,
+            ...(!isImageRequest && { systemInstruction: "You are Manee, a witty AI. Use Hinglish." })
+        });
+
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+
+        for (const part of response.candidates![0].content.parts) {
+            if (part.text) {
+                responseText += part.text;
+            } else if (part.inlineData) {
+                const base64Data = part.inlineData.data;
+                const mimeType = part.inlineData.mimeType || 'image/png';
+                responseText += `\n\n![Generated Image](data:${mimeType};base64,${base64Data})`;
             }
-        } else {
-            const [rows]: any = await pool.query(
-                'SELECT role, content FROM messages WHERE chat_id = ? ORDER BY id ASC LIMIT 10',
-                [chatId]
-            );
-
-            const history = rows.map((m: any) => ({
-                role: m.role === 'user' ? 'user' : 'model',
-                parts: [{ text: m.content }],
-            }));
-
-            const chatModel = genAI.getGenerativeModel({ 
-                model: "gemini-3.1-flash", 
-                systemInstruction: "You are Manee, a helpful, witty AI. Use Hinglish if needed. Be concise." 
-            });
-
-            const chatSession = chatModel.startChat({ history });
-            const result = await chatSession.sendMessage(prompt);
-            finalResponseText = result.response.text();
         }
 
         await pool.query('INSERT INTO messages (chat_id, role, content) VALUES (?, ?, ?)', 
-            [chatId, 'manee', finalResponseText]);
+            [chatId, 'manee', responseText]);
 
-        return NextResponse.json({ 
-            text: finalResponseText, 
-            chatId,
-            image: generatedImageData 
-        });
+        return NextResponse.json({ text: responseText, chatId });
 
     } catch (error: any) {
         console.error('Logic Error:', error.message);
-        return NextResponse.json({ error: 'Mafi chahta hoon, image generate nahi ho saki.' }, { status: 500 });
+        return NextResponse.json({ error: 'Mafi chahta hoon, Manee abhi busy hai.' }, { status: 500 });
     }
 }
